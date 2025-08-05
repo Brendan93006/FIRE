@@ -1,0 +1,162 @@
+import os
+
+import math
+import sqlite3
+from flask import Flask, flash, redirect, render_template, request, session, g
+from flask_session import Session
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from helpers import login_required, usd, lookup, apology
+
+app = Flask(__name__)
+
+# Function to get a database connection per request
+def get_db():
+	if 'db' not in g:
+		g.db = sqlite3.connect('FIRE.db')
+		g.db.row_factory = sqlite3.Row
+	return g.db
+
+db = get_db()
+# Close the database connection after each request
+@app.teardown_appcontext
+def close_db(error):
+	db = g.pop('db', None)
+	if db is not None:
+		db.close()
+
+@app.route('/')
+def index():
+	return render_template('index.html')
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Log user in"""
+    session.clear()
+
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        if not username:
+            return apology("must provide username", 403)
+        if not password:
+            return apology("must provide password", 403)
+
+        rows = db.execute("SELECT * FROM users WHERE username = ?", username)
+
+        if len(rows) != 1 or not check_password_hash(rows[0]["hash"], password):
+            return apology("invalid username and/or password", 403)
+
+        session["user_id"] = rows[0]["id"]
+        return redirect("/")
+
+    return render_template("login.html")
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """Register user"""
+
+    if request.method == "GET":
+        return render_template("register.html")
+
+    username = request.form.get("username")
+    password = request.form.get("password")
+    confirm_password = request.form.get("confirmation")
+
+    if not username:
+        return apology("must provide username", 400)
+    if not password:
+        return apology("must provide password", 400)
+    if not confirm_password:
+        return apology("must confirm password", 400)
+    if password != confirm_password:
+        return apology("passwords must match", 400)
+	
+    rows = db.execute("SELECT * FROM users WHERE username = ?", username)
+    if rows:
+        return apology("username already registered", 400)
+
+    hash_pw = generate_password_hash(password)
+    db.execute("INSERT INTO users (username, hash) VALUES (?, ?)", username, hash_pw)
+    rows = db.execute("SELECT * FROM users WHERE username = ?", username)
+    session["user_id"] = rows[0]["id"]
+
+    return redirect("/")
+
+@app.route("/logout")
+def logout():
+    """Log user out"""
+    session.clear()
+    return redirect("/")
+
+@app.route('/invest', methods=['GET', 'POST'])
+@login_required
+def invest():
+	return render_template('invest.html')
+
+@app.route("/research", methods=["GET", "POST"])
+@login_required
+def research():
+    """Get stock info."""
+    if request.method == "POST":
+        symbol = request.form.get("symbol")
+        stock = lookup(symbol)
+        if stock is None:
+            return apology("Invalid symbol")
+        return render_template("researched.html",
+            name=stock["name"],
+            symbol=stock["symbol"],
+            price=usd(stock["price"]))
+    else:
+        return render_template("research.html")
+
+@app.route('/calculator', methods=['GET', 'POST'])
+@login_required
+def calculator():
+	if request.method == 'POST':
+		# Process calculator input here
+		income = float(request.form.get('income'))
+		expenses = float(request.form.get('expenses'))
+		savings_rate = float(request.form.get('savings_rate'))
+		net_worth = float(request.form.get('net_worth'))
+		swr = float(request.form.get('SWR'))
+		apr = float(request.form.get('APR'))
+		# Perform calculations and render results
+		fire_number = expenses / (swr / 100) if swr else None
+		if fire_number and net_worth > 0 and apr > 0:
+			r = apr / 100
+			try:
+				years_to_fire = math.log(fire_number / net_worth) / math.log(1 + r)
+				if years_to_fire < 0:
+					years_to_fire = None
+			except (ValueError, ZeroDivisionError):
+				years_to_fire = None
+		# Store results in the database
+		db.execute('UPDATE users (fire_number, time_to_fire) VALUES (?, ?) WHERE id = ?', (fire_number, years_to_fire, session["user_id"]))
+		db.commit()
+		return render_template('calculator.html', fire_number=fire_number, years_to_fire=years_to_fire)
+
+	return render_template('calculator.html')
+
+
+@app.route('/deposit', methods=['GET', 'POST'])
+@login_required
+def deposit():
+	if request.method == 'POST':
+		amount = request.form.get('amount', '').strip()
+		try:
+			amount = float(amount)
+			if amount <= 0:
+				raise ValueError("Amount must be positive")
+		except (ValueError, TypeError):
+			flash('Invalid amount', 'error')
+			return redirect('/deposit')
+		
+		user_id = session['user_id']
+		db.execute('UPDATE users SET cash = cash + ? WHERE id = ?', (amount, user_id))
+		db.commit()
+		flash('Deposit successful', 'success')
+		return redirect('/')
+
+	return render_template('deposit.html')
