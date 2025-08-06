@@ -1,0 +1,41 @@
+{% extend "layout.html" %}
+
+{% block title %}
+- Calculator
+{% endblock %}
+
+{% block main %}
+    <h2> FIRE Calculator</h2>
+    <form method="POST" action="/calculator">
+        <div class="mb-3">
+            <label for="income" class="form-label">Annual Take-Home Pay</label>
+            <input type="number" class="form-control" id="income" name="income" required>
+        </div>
+        <div class="mb-3">
+            <label for="expenses" class="form-label">Annual Spending</label>
+            <input type="number" class="form-control" id="expenses" name="expenses" required>
+        </div>
+        <div class="mb-3">
+            <label for="savings_rate" class="form-label">Annual Savings</label>
+            <input type="number" class="form-control" id="savings_rate" name="savings_rate" step="0.01" required>
+        </div>
+        <div class="mb-3">
+            <label for="net_worth" class="form-label">Current Net Worth</label>
+            <input type="number" class="form-control" id="net_worth" name="net_worth" required>
+        </div>
+        <div class="mb-3">
+            <label for="SWR" class="form-label">Expected Safe Withdrawal Rate (%)</label>
+            <input type="number" class="form-control" id="SWR" name="SWR" step="0.01" required>
+        </div>
+        <div class="mb-3">
+            <label for="APR" class="form-label">Expected Annual Return (%)</label>
+            <input type="number" class="form-control" id="APR" name="APR" step="0.01" required>
+        </div>
+        <button type="submit" class="btn btn-success">Calculate</button>
+    </form>
+
+    {% if fire_number is not none %}
+        <h3>FIRE Number: {{ fire_number | round(2) | usd }}</h3>
+        <h3>Years to FIRE: {{ years_to_fire | round(1) }}</h3>
+    {% endif %}
+{% endblock %}
