@@ -90,10 +90,54 @@ def logout():
     session.clear()
     return redirect("/")
 
+@app.route("/accounts", methods=["GET", "POST"])
+@login_required
+def accounts():
+	"""Display user accounts"""
+	if request.method == "POST":
+		# TODO: Handle account-related actions here
+		pass
+
+	user_id = session["user_id"]
+	user = db.execute("SELECT * FROM users WHERE id = ?", user_id)
+	if not user:
+		return apology("User not found", 404)
+
+	return render_template("accounts.html", user=user[0])
+
 @app.route('/invest', methods=['GET', 'POST'])
 @login_required
 def invest():
 	return render_template('invest.html')
+
+@app.route("/sell", methods=["GET", "POST"])
+@login_required
+def sell():
+	"""Sell shares of stock"""
+	if request.method == "POST":
+		symbol = request.form.get("symbol")
+		shares = request.form.get("shares")
+
+		if not symbol or not shares:
+			return apology("must provide symbol and shares", 400)
+
+		try:
+			shares = int(shares)
+			if shares <= 0:
+				raise ValueError
+		except ValueError:
+			return apology("invalid number of shares", 400)
+
+		stock = lookup(symbol)
+		if stock is None:
+			return apology("invalid stock symbol", 400)
+
+		# TODO: Here you would implement the logic to sell the stock
+
+		flash(f"Sold {shares} shares of {stock['symbol']} at {usd(stock['price'])}")
+		return redirect("/")
+
+	return render_template("sell.html")
 
 @app.route("/research", methods=["GET", "POST"])
 @login_required
