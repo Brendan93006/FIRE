@@ -1,0 +1,26 @@
+{% extend "layout.html" %}
+
+{% block title %}
+- Sell
+{% endblock %}
+
+{% block main %}
+    <h2>Sell Investments</h2>
+    <form method="POST" action="/sell">
+        <div class="mb-3">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="symbol" placeholder="Symbol" type="text">
+        </div>
+        <div class="mb-3">
+            <input class="form-control mx-auto w-auto" name="shares" placeholder="Shares" type="number" step="1" min="1">
+        </div>
+        <div class="mb-3">
+            <select class="form-control mx-auto w-auto" name="account" placeholder="Account" type="text">
+                <option value="" disabled selected>Select Account</option>
+                {% for account in accounts %}
+                    <option value="{{ account.id }}">{{ account.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn btn-success" type="submit">Sell Shares</button>
+    </form>
+{% endblock %}
