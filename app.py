@@ -46,17 +46,17 @@ def index():
 		return redirect('/login')
 
 	user_id = session['user_id']
-	user = g.db.execute("SELECT * FROM users WHERE id = ?", user_id)
+	user = g.db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 	if not user:
 		return apology("User not found", 404)
 
-	accounts_results = g.db.execute("SELECT * FROM accounts WHERE user_id = ?", user_id)
+	accounts_results = g.db.execute("SELECT * FROM accounts WHERE user_id = ?", (user_id,)).fetchall()
 	accounts = accounts_results
 
 	net_worth = sum(account['balance'] for account in accounts)
 
 	top_investment_results = g.db.execute("""SELECT symbol, SUM(CASE WHEN type = 'BUY' THEN shares ELSE -shares END) AS total_shares
-		FROM transactions WHERE user_id = ? GROUP BY symbol ORDER BY total_shares DESC LIMIT 5""", user_id)
+		FROM transactions WHERE user_id = ? GROUP BY symbol ORDER BY total_shares DESC LIMIT 5""", (user_id,))
 	top_investments = []
 	for row in top_investment_results:
 		symbol = row['symbol']
@@ -71,11 +71,15 @@ def index():
 					'value': row['total_shares'] * stock['price']
 				})
 
-	fire_results = g.db.execute("SELECT fire_number, time_to_fire FROM users WHERE id = ?", user_id)
-	fire_number = fire_results[0]['fire_number'] if fire_results else None
-	years_to_fire = fire_results[0]['time_to_fire'] if fire_results else None
+	fire_results = g.db.execute("SELECT fire_number, time_to_fire FROM users WHERE id = ?", (user_id,)).fetchone()
+	if fire_results:
+		fire_number = fire_results['fire_number']
+		years_to_fire = fire_results['time_to_fire']
+	else:
+		fire_number = None
+		years_to_fire = None
 
-	return render_template("index.html", user=user[0], accounts=accounts, net_worth=usd(net_worth), 
+	return render_template("index.html", user=user, accounts=accounts, net_worth=usd(net_worth), 
 						   top_investments=top_investments, fire_number=usd(fire_number) if fire_number else None, years_to_fire=years_to_fire if years_to_fire else None)
 
 @app.route("/history")
@@ -99,7 +103,7 @@ def login():
         if not password:
             return apology("must provide password", 403)
 
-        rows = g.db.execute("SELECT * FROM users WHERE username = ?", username)
+        rows = g.db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchall()
 
         if len(rows) != 1 or not check_password_hash(rows[0]["hash"], password):
             return apology("invalid username and/or password", 403)
@@ -129,13 +133,13 @@ def register():
     if password != confirm_password:
         return apology("passwords must match", 400)
 	
-    rows = g.db.execute("SELECT * FROM users WHERE username = ?", username)
+    rows = g.db.execute("SELECT * FROM users WHERE username = ?", (username,))
     if rows:
         return apology("username already registered", 400)
 
     hash_pw = generate_password_hash(password)
     g.db.execute("INSERT INTO users (username, hash) VALUES (?, ?)", username, hash_pw)
-    rows = g.db.execute("SELECT * FROM users WHERE username = ?", username)
+    rows = g.db.execute("SELECT * FROM users WHERE username = ?", (username,))
     session["user_id"] = rows[0]["id"]
 
     return redirect("/")
@@ -184,11 +188,11 @@ def accounts():
 	"""Display user accounts"""
 	
 	user_id = session["user_id"]
-	user = g.db.execute("SELECT * FROM users WHERE id = ?", user_id)
+	user = g.db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 	if not user:
 		return apology("User not found", 404)
 	
-	accounts_results = g.db.execute("SELECT * FROM accounts WHERE user_id = ?", user_id)
+	accounts_results = g.db.execute("SELECT * FROM accounts WHERE user_id = ?", (user_id,))
 	
 	return render_template("accounts.html", user=user[0], accounts=accounts_results)
 
@@ -225,12 +229,15 @@ def invest():
 		total = shares * price
 		user_id = session["user_id"]
 
-		account_balance = g.db.execute("SELECT balance FROM accounts WHERE user_id = ? AND name = ? AND type = 'CASH'", user_id, account)
+		account_balance = g.db.execute("SELECT balance FROM accounts WHERE user_id = ? AND name = ? AND type = 'CASH'", (user_id, account,)).fetchone()
 		if not account_balance or account_balance[0]['balance'] < total:
 			return apology("not enough cash in account", 400)
 		
 		g.db.execute("INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, 'BUY', ?)", user_id, symbol, shares, price, account)
-		g.db.execute("""UPDATE accounts SET balance = balance - ? WHERE user_id = ? AND name = ?""", total, user_id, account)
+		g.db.execute(
+			"""UPDATE accounts SET balance = balance - ? WHERE user_id = ? AND name = ?""", 
+			(total, user_id, account)
+		)
 		g.db.commit()
 
 		flash(f"Bought {shares} shares of {stock['symbol']} at {usd(stock['price'])}")
@@ -280,7 +287,10 @@ def sell():
 		
 		# Record the transaction
 		g.db.execute("INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, 'SELL', ?)", user_id, symbol, -shares, price, account)
-		g.db.execute("UPDATE accounts SET balance = balance + ? WHERE user_id = ? AND name = ? AND type = 'CASH'", total, user_id, account)
+		g.db.execute(
+			"UPDATE accounts SET balance = balance + ? WHERE user_id = ? AND name = ? AND type = 'CASH'", 
+			(total, user_id, account)
+		)
 		g.db.commit()
 		
 		flash(f"Sold {shares} shares of {stock['symbol']} at {usd(stock['price'])}")
@@ -334,7 +344,10 @@ def calculator():
 			except (ValueError, ZeroDivisionError):
 				years_to_fire = None
 		# Store results in the database
-		g.db.execute('UPDATE users SET fire_number = ?, time_to_fire = ? WHERE id = ?', fire_number, years_to_fire, session["user_id"])
+		g.db.execute(
+			'UPDATE users SET fire_number = ?, time_to_fire = ? WHERE id = ?', 
+			(fire_number, years_to_fire, session["user_id"])
+		)
 		g.db.commit()
 		return render_template('calculator.html', fire_number=fire_number, years_to_fire=years_to_fire)
 
@@ -378,7 +391,7 @@ def deposit():
 			# Update existing CASH account balance
 			g.db.execute(
 				"UPDATE accounts SET balance = balance + ? WHERE user_id = ? AND type = 'CASH'",
-				amount, user_id
+				(amount, user_id)
 			)
 
 		g.db.commit()
