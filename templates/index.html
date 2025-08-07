@@ -9,31 +9,41 @@
         <h2>Dashboard</h2>
             <thead>
                 <tr>
-                    <th>RETIREMENT</th>
+                    <th>CASH</th>
+                    <th>SAVINGS</th>
                     <th>BROKERAGE</th>
+                    <th>RETIREMENT</th>
                     <th>HEALTH</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td>TODO: Retirement Account Details</td>
-                    <td>TODO: Brokerage Account Details</td>
-                    <td>TODO: Health Account Details</td>
+                    {% for account in accounts %}
+                        {% if account.type == "CASH" %}
+                            <td>{{ account.balance | usd }}</td>
+                        {% elif account.type == "SAVINGS" %}
+                            <td>{{ account.balance | usd }}</td>
+                        {% elif account.type == "BROKERAGE" %}
+                            <td>{{ account.balance | usd }}</td>
+                        {% elif account.type == "RETIREMENT" %}
+                            <td>{{ account.balance | usd }}</td>
+                        {% elif account.type == "HEALTH" %}
+                            <td>{{ account.balance | usd }}</td>
+                        {% endif %}
+                    {% endfor %}
                 </tr>
             </tbody>
     </table>
-
-    <p><strong>Cash:</strong>  TODO: amount of cash</p>
     <form action="/deposit" method="post">
         <button class="btn btn-success" type="submit">Deposit</button>
     </form>
-    <p><strong>Net Worth:</strong> TODO: Net Worth</p>
-    <p><strong>Top Investments:</strong> TODO: list of investments</p>
+    <p><strong>Net Worth:</strong> {{ net_worth }}</p>
+    <p><strong>Top Investments:</strong> {{ top_investments }}</p>
     <form action="/invest" method="post">
         <button class="btn btn-success" type="submit">Invest</button>
     </form>
-    <p><strong>FIRE Number:</strong> TODO: FIRE Number</p>
-    <p><strong>Time to FIRE:</strong> TODO: time to FIRE</p>
+    <p><strong>FIRE Number:</strong> {{ fire_number }}</p>
+    <p><strong>Time to FIRE:</strong> {{ years_to_fire }}</p>
     <form action="/calculator" method="post">
         <button class="btn btn-success" type="submit">Calculate</button>
     </form>

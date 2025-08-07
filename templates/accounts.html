@@ -10,16 +10,21 @@
         <thead>
             <tr>
                 <th>Account Name</th>
-                <th>Balance</th>
+                <th>Account Type</th>
+                <th>Account Balance</th>
             </tr>
         </thead>
         <tbody>
             {% for account in accounts %}
                 <tr>
-                    <td>{{ account.name }}</td>
-                    <td>{{ account.balance | usd }}</td>
+                    <td>{{ accounts.name }}</td>
+                    <td>{{ accounts.type }}</td>
+                    <td>{{ accounts.balance | usd }}</td>
                 </tr>
             {% endfor %}
         </tbody>
     </table>
+    <form action="/open" method="post">
+        <button class="btn btn-success" type="submit">Open Account</button>
+    </form>
 {% endblock %}
