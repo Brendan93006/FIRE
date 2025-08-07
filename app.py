@@ -2,13 +2,21 @@ import os
 
 import math
 import sqlite3
-from flask import Flask, flash, redirect, render_template, request, session, g
-from flask_session import Session
+from flask import Flask, flash, redirect, render_template, request, session
+from flask import g
+from datetime import datetime
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from helpers import login_required, usd, lookup, apology
 
 app = Flask(__name__)
+
+# Configure the app
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev')
+
+app.config['DATABASE'] = 'FIRE.db'
+
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 # Function to get a database connection per request
 def get_db():
@@ -17,7 +25,13 @@ def get_db():
 		g.db.row_factory = sqlite3.Row
 	return g.db
 
-db = get_db()
+# Ensure templates are auto-reloaded
+@app.before_request
+def before_request():
+	"""Connect to the database before each request."""
+	g.db = get_db()
+
+
 # Close the database connection after each request
 @app.teardown_appcontext
 def close_db(error):
@@ -32,16 +46,16 @@ def index():
 		return redirect('/login')
 
 	user_id = session['user_id']
-	user = db.execute("SELECT * FROM users WHERE id = ?", user_id)
+	user = g.db.execute("SELECT * FROM users WHERE id = ?", user_id)
 	if not user:
 		return apology("User not found", 404)
 
-	accounts_results = db.execute("SELECT * FROM accounts WHERE user_id = ?", user_id)
+	accounts_results = g.db.execute("SELECT * FROM accounts WHERE user_id = ?", user_id)
 	accounts = accounts_results
 
 	net_worth = sum(account['balance'] for account in accounts)
 
-	top_investment_results = db.execute("""SELECT symbol, SUM(CASE WHEN type = 'BUY' THEN shares ELSE -shares END) AS total_shares
+	top_investment_results = g.db.execute("""SELECT symbol, SUM(CASE WHEN type = 'BUY' THEN shares ELSE -shares END) AS total_shares
 		FROM transactions WHERE user_id = ? GROUP BY symbol ORDER BY total_shares DESC LIMIT 5""", user_id)
 	top_investments = []
 	for row in top_investment_results:
@@ -57,7 +71,7 @@ def index():
 					'value': row['total_shares'] * stock['price']
 				})
 
-	fire_results = db.execute("SELECT fire_number, time_to_fire FROM users WHERE id = ?", user_id)
+	fire_results = g.db.execute("SELECT fire_number, time_to_fire FROM users WHERE id = ?", user_id)
 	fire_number = fire_results[0]['fire_number'] if fire_results else None
 	years_to_fire = fire_results[0]['time_to_fire'] if fire_results else None
 
@@ -68,7 +82,7 @@ def index():
 @login_required
 def history():
     """Show history of transactions"""
-    rows = db.execute("SELECT * FROM transactions WHERE user_id = ?", session["user_id"])
+    rows = g.db.execute("SELECT * FROM transactions WHERE user_id = ?", session["user_id"])
     return render_template("history.html", transactions=rows)
 
 @app.route("/login", methods=["GET", "POST"])
@@ -85,7 +99,7 @@ def login():
         if not password:
             return apology("must provide password", 403)
 
-        rows = db.execute("SELECT * FROM users WHERE username = ?", username)
+        rows = g.db.execute("SELECT * FROM users WHERE username = ?", username)
 
         if len(rows) != 1 or not check_password_hash(rows[0]["hash"], password):
             return apology("invalid username and/or password", 403)
@@ -115,13 +129,13 @@ def register():
     if password != confirm_password:
         return apology("passwords must match", 400)
 	
-    rows = db.execute("SELECT * FROM users WHERE username = ?", username)
+    rows = g.db.execute("SELECT * FROM users WHERE username = ?", username)
     if rows:
         return apology("username already registered", 400)
 
     hash_pw = generate_password_hash(password)
-    db.execute("INSERT INTO users (username, hash) VALUES (?, ?)", username, hash_pw)
-    rows = db.execute("SELECT * FROM users WHERE username = ?", username)
+    g.db.execute("INSERT INTO users (username, hash) VALUES (?, ?)", username, hash_pw)
+    rows = g.db.execute("SELECT * FROM users WHERE username = ?", username)
     session["user_id"] = rows[0]["id"]
 
     return redirect("/")
@@ -138,8 +152,8 @@ def open_account():
 	"""Open a new account"""
 	if request.method == "POST":
 		account_type = request.form.get("account_type")
-		if account_type is 'CASH':
-			if db.execute("SELECT * FROM accounts WHERE user_id = ? AND type = 'CASH'", session["user_id"]).fetchone():
+		if account_type == 'CASH':
+			if g.db.execute("SELECT * FROM accounts WHERE user_id = ? AND type = 'CASH'", session["user_id"]).fetchone():
 				return apology("Cash account already exists", 400)
 		elif account_type not in ['CASH', 'SAVINGS', 'BROKERAGE', 'RETIREMENT', 'HEALTH']:
 			return apology("Invalid account type", 400)
@@ -157,8 +171,8 @@ def open_account():
 			return apology("invalid initial balance", 400)
 
 		user_id = session["user_id"]
-		db.execute("INSERT INTO accounts (user_id, name, type, balance) VALUES (?, ?, ?, ?)", user_id, account_name, account_type, initial_balance)
-		db.commit()
+		g.db.execute("INSERT INTO accounts (user_id, name, type, balance) VALUES (?, ?, ?, ?)", user_id, account_name, account_type, initial_balance)
+		g.db.commit()
 		flash("Account created successfully", "success")
 		return redirect("/accounts")
 
@@ -170,11 +184,11 @@ def accounts():
 	"""Display user accounts"""
 	
 	user_id = session["user_id"]
-	user = db.execute("SELECT * FROM users WHERE id = ?", user_id)
+	user = g.db.execute("SELECT * FROM users WHERE id = ?", user_id)
 	if not user:
 		return apology("User not found", 404)
 	
-	accounts_results = db.execute("SELECT * FROM accounts WHERE user_id = ?", user_id)
+	accounts_results = g.db.execute("SELECT * FROM accounts WHERE user_id = ?", user_id)
 	
 	return render_template("accounts.html", user=user[0], accounts=accounts_results)
 
@@ -211,13 +225,13 @@ def invest():
 		total = shares * price
 		user_id = session["user_id"]
 
-		account_balance = db.execute("SELECT balance FROM accounts WHERE user_id = ? AND name = ? AND type = 'CASH'", user_id, account)
+		account_balance = g.db.execute("SELECT balance FROM accounts WHERE user_id = ? AND name = ? AND type = 'CASH'", user_id, account)
 		if not account_balance or account_balance[0]['balance'] < total:
 			return apology("not enough cash in account", 400)
 		
-		db.execute("INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, 'BUY', ?)", user_id, symbol, shares, price, account)
-		db.execute("""UPDATE accounts SET balance = balance - ? WHERE user_id = ? AND name = ?""", total, user_id, account)
-		db.commit()
+		g.db.execute("INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, 'BUY', ?)", user_id, symbol, shares, price, account)
+		g.db.execute("""UPDATE accounts SET balance = balance - ? WHERE user_id = ? AND name = ?""", total, user_id, account)
+		g.db.commit()
 
 		flash(f"Bought {shares} shares of {stock['symbol']} at {usd(stock['price'])}")
 		return redirect("/")
@@ -249,7 +263,7 @@ def sell():
 
 		# logic to sell the stock
 		user_id = session["user_id"]
-		result = db.execute("SELECT symbol, SUM(CASE WHEN type = 'BUY' THEN shares ELSE -shares END) AS total_shares FROM transactions WHERE user_id = ? AND symbol = ? GROUP BY symbol", (user_id, symbol))
+		result = g.db.execute("SELECT symbol, SUM(CASE WHEN type = 'BUY' THEN shares ELSE -shares END) AS total_shares FROM transactions WHERE user_id = ? AND symbol = ? GROUP BY symbol", (user_id, symbol))
 		if not result or result[0]['total_shares'] < shares:
 			return apology("not enough shares to sell", 400)
 		
@@ -260,14 +274,14 @@ def sell():
 		price = stock['price']
 		total = shares * price
 
-		account_balance = db.execute("SELECT balance FROM accounts WHERE user_id = ? AND name = ? AND type = 'CASH'", user_id, account)
+		account_balance = g.db.execute("SELECT balance FROM accounts WHERE user_id = ? AND name = ? AND type = 'CASH'", user_id, account)
 		if not account_balance:
 			return apology("account not found", 400)
 		
 		# Record the transaction
-		db.execute("INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, 'SELL', ?)", user_id, symbol, -shares, price, account)
-		db.execute("UPDATE accounts SET balance = balance + ? WHERE user_id = ? AND name = ? AND type = 'CASH'", total, user_id, account)
-		db.commit()
+		g.db.execute("INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, 'SELL', ?)", user_id, symbol, -shares, price, account)
+		g.db.execute("UPDATE accounts SET balance = balance + ? WHERE user_id = ? AND name = ? AND type = 'CASH'", total, user_id, account)
+		g.db.commit()
 		
 		flash(f"Sold {shares} shares of {stock['symbol']} at {usd(stock['price'])}")
 		return redirect("/")
@@ -320,8 +334,8 @@ def calculator():
 			except (ValueError, ZeroDivisionError):
 				years_to_fire = None
 		# Store results in the database
-		db.execute('UPDATE users (fire_number, time_to_fire) VALUES (?, ?) WHERE id = ?', (fire_number, years_to_fire, session["user_id"]))
-		db.commit()
+		g.db.execute('UPDATE users SET fire_number = ?, time_to_fire = ? WHERE id = ?', fire_number, years_to_fire, session["user_id"])
+		g.db.commit()
 		return render_template('calculator.html', fire_number=fire_number, years_to_fire=years_to_fire)
 
 	return render_template('calculator.html')
@@ -341,10 +355,35 @@ def deposit():
 			return redirect('/deposit')
 		
 		user_id = session['user_id']
-		db.execute("INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, 'CASH', 1, ?, 'DEPOSIT', 'CASH')", user_id, amount)
-		db.execute("INSERT INTO accounts (user_id, name, type, balance ) VALUES (?, 'CASH', 'CASH', ?)", user_id, amount)
-		db.commit()
+
+		# Log the transaction
+		g.db.execute(
+			"INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, 'CASH', 1, ?, 'DEPOSIT', 'CASH')",
+			user_id, amount
+		)
+
+		# Check if a CASH account already exists
+		existing = g.db.execute(
+			"SELECT * FROM accounts WHERE user_id = ? AND type = 'CASH'",
+			user_id
+		).fetchone()
+
+		if not existing:
+			# Insert a new CASH account
+			g.db.execute(
+				"INSERT INTO accounts (user_id, name, type, balance) VALUES (?, 'Cash Account', 'CASH', ?)",
+				user_id, amount
+			)
+		else:
+			# Update existing CASH account balance
+			g.db.execute(
+				"UPDATE accounts SET balance = balance + ? WHERE user_id = ? AND type = 'CASH'",
+				amount, user_id
+			)
+
+		g.db.commit()
 		flash('Deposit successful', 'success')
 		return redirect('/')
 
+	# If GET request
 	return render_template('deposit.html')
