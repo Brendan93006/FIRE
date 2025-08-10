@@ -185,7 +185,7 @@ def open_account():
 		flash("Account created successfully", "success")
 		return redirect("/accounts")
 
-	return render_template("accounts.html")
+	return render_template("open.html")
 
 @app.route("/accounts", methods=["GET", "POST"])
 @login_required
@@ -361,7 +361,6 @@ def calculator():
         except ValueError:
             return apology("Please enter valid numbers in all fields", 400)
 
-        # Check for zero or negative inputs that break the calculations
         if swr <= 0 or expenses <= 0:
             return apology("Savings withdrawal rate and expenses must be greater than zero", 400)
 
@@ -377,16 +376,20 @@ def calculator():
             except (ValueError, ZeroDivisionError):
                 years_to_fire = None
 
-        # Store results in the database
-        g.db.execute(
-            'UPDATE users SET fire_number = ?, time_to_fire = ? WHERE id = ?',
-            (fire_number, years_to_fire, session["user_id"])
-        )
-        g.db.commit()
+        try:
+            g.db.execute(
+                'UPDATE users SET fire_number = ?, time_to_fire = ? WHERE id = ?',
+                (fire_number, years_to_fire, session["user_id"])
+            )
+            g.db.commit()
+        except Exception as e:
+            print("Database update error:", e)
+            return apology("Internal server error", 500)
 
         return render_template('calculator.html', fire_number=fire_number, years_to_fire=years_to_fire)
 
     return render_template('calculator.html')
+
 
 
 @app.route('/deposit', methods=['GET', 'POST'])
