@@ -195,9 +195,9 @@ def accounts():
 	if not user:
 		return apology("User not found", 404)
 	
-	accounts_results = g.db.execute("SELECT * FROM accounts WHERE user_id = ?", (user_id,))
+	accounts_results = g.db.execute("SELECT * FROM accounts WHERE user_id = ?", (user_id,)).fetchall()
 	
-	return render_template("accounts.html", user=user[0], accounts=accounts_results)
+	return render_template("accounts.html", user=user, accounts=accounts_results)
 
 @app.route('/invest', methods=['GET', 'POST'])
 @login_required
@@ -394,8 +394,8 @@ def deposit():
 
         # Log the transaction
         g.db.execute(
-            "INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, 'CASH', 1, ?, 'DEPOSIT', 'CASH')",
-            (user_id, amount)
+            "INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, 'CASH', 1, amount, 'DEPOSIT', 'CASH')
         )
 
         # Check if a CASH account already exists
@@ -407,8 +407,8 @@ def deposit():
         if not existing:
             # Insert a new CASH account
             g.db.execute(
-                "INSERT INTO accounts (user_id, name, type, balance) VALUES (?, 'Cash Account', 'CASH', ?)",
-                (user_id, amount)
+                "INSERT INTO accounts (user_id, name, type, balance) VALUES (?, ?, ?, ?)",
+                (user_id, 'Cash Account', 'CASH', amount)
             )
         else:
             # Update existing CASH account balance
@@ -423,3 +423,6 @@ def deposit():
 
     # If GET request
     return render_template('deposit.html')
+
+if __name__ == "__main__":
+    app.run(debug=True)
