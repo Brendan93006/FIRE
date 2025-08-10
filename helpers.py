@@ -1,10 +1,11 @@
 from functools import wraps
-from flask import redirect, render_template, sessions
+from flask import redirect, render_template, session
 from flask import session
 import yfinance as yf
 
 def apology(message, code=400):
     """Render message as an apology to user."""
+    return render_template("apology.html", top=code, bottom=message), code
 
 def login_required(f):
     """Decorator to require login for certain routes."""
@@ -21,13 +22,16 @@ def usd(value):
 
 def lookup(symbol):
     """Look up quote for symbol."""
-    stock = yf.Ticker(symbol)
-    data = stock.history(period="1d")
-    if data.empty:
+    try:
+        stock = yf.Ticker(symbol)
+        data = stock.history(period="1d")
+        if data.empty:
+            return None
+        price = data['Close'].iloc[-1]
+        return {
+            "symbol": symbol.upper(),
+            "price": price,
+            "name": stock.info.get('longName', 'Unknown')
+        }
+    except Exception:
         return None
-    price = data['Close'].iloc[-1]
-    return {
-        "symbol": symbol.upper(),
-        "price": price,
-        "name": stock.info.get('longName', 'Unknown')
-    }
