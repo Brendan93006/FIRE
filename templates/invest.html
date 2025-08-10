@@ -7,11 +7,13 @@
 {% block main %}
         <form action="/invest" method="POST">
         <div class="mb-3">
-            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="symbol" placeholder="Symbol" type="text">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="symbol" placeholder="Symbol" type="text" required>
         </div>
         <div class="mb-3">
-            <radio class="form-check-input" id="shares" name="type" value="shares" checked></radio>
-            <radio class="form-check-input" id="dollars" name="type" value="dollars"></radio>
+            <input type="radio" class="form-check-input" id="shares" name="type" value="shares" checked>
+            <label class="form-check-label" for="shares">Shares</label>
+            <input type="radio" class="form-check-input" id="dollars" name="type" value="dollars">
+            <label class="form-check-label" for="dollars">Dollars</label>
         </div>
         <div class="mb-3">
             <input class="form-control mx-auto w-auto" name="shares" placeholder="Shares" type="number" step="1" min="1">
@@ -21,7 +23,7 @@
         </div>
         
         <div class="mb-3">
-            <select class="form-control mx-auto w-auto" name="account" placeholder="Account" type="text">
+            <select class="form-control mx-auto w-auto" name="account" placeholder="Account" type="text" required>
                 <option value="" disabled selected>Select Account</option>
                 {% for account in accounts %}
                     <option value="{{ account.id }}">{{ account.name }}</option>
@@ -31,16 +33,24 @@
         <button class="btn btn-success" type="submit">Buy Shares</button>
     </form>
     <script>
-        document.querySelectorAll('input[name="type"]').forEach((elem) => {
-            elem.addEventListener("change", function(event) {
-                if (event.target.value === "shares") {
-                    document.querySelector('input[name="dollars"]').element.style.display = "none";
-                    document.querySelector('input[name="shares"]').element.style.display = "block";
-                } else {
-                    document.querySelector('input[name="shares"]').element.style.display = "none";
-                    document.querySelector('input[name="dollars"]').element.style.display = "block";
-                }
-            });
-        });
+        const sharesRadio = document.getElementById('shares');
+        const dollarsRadio = document.getElementById('dollars');
+        const sharesInputDiv = document.querySelector('input[name="shares"]').parentElement;
+        const dollarsInputDiv = document.querySelector('input[name="dollars"]').parentElement;
+
+        function toggleInputs() {
+            if (sharesRadio.checked) {
+                sharesInputDiv.style.display = 'block';
+                dollarsInputDiv.style.display = 'none';
+            } else {
+                sharesInputDiv.style.display = 'none';
+                dollarsInputDiv.style.display = 'block';
+            }
+        }
+        sharesRadio.addEventListener('change', toggleInputs);
+        dollarsRadio.addEventListener('change', toggleInputs);
+
+        // Initialize visibility based on the default checked radio button
+        toggleInputs();
     </script>
 {% endblock %}

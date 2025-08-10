@@ -34,17 +34,17 @@
                 </tr>
             </tbody>
     </table>
-    <form action="/deposit" method="post">
+    <form action="/deposit" method="POST">
         <button class="btn btn-success" type="submit">Deposit</button>
     </form>
     <p><strong>Net Worth:</strong> {{ net_worth }}</p>
     <p><strong>Top Investments:</strong> {{ top_investments }}</p>
-    <form action="/invest" method="post">
+    <form action="/invest" method="GET">
         <button class="btn btn-success" type="submit">Invest</button>
     </form>
     <p><strong>FIRE Number:</strong> {{ fire_number }}</p>
     <p><strong>Time to FIRE:</strong> {{ years_to_fire }}</p>
-    <form action="/calculator" method="post">
+    <form action="/calculator" method="GET">
         <button class="btn btn-success" type="submit">Calculate</button>
     </form>
 {% endblock %}
