@@ -18,6 +18,8 @@ app.config['DATABASE'] = 'FIRE.db'
 
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
+app.jinja_env.filters["usd"] = usd
+
 # Function to get a database connection per request
 def get_db():
     if 'db' not in g:
@@ -348,33 +350,43 @@ def research():
 @app.route('/calculator', methods=['GET', 'POST'])
 @login_required
 def calculator():
-	if request.method == 'POST':
-		# Process calculator input here
-		income = float(request.form.get('income'))
-		expenses = float(request.form.get('expenses'))
-		savings_rate = float(request.form.get('savings_rate'))
-		net_worth = float(request.form.get('net_worth'))
-		swr = float(request.form.get('SWR'))
-		apr = float(request.form.get('APR'))
-		# Perform calculations and render results
-		fire_number = expenses / (swr / 100) if swr else None
-		if fire_number and net_worth > 0 and apr > 0:
-			r = apr / 100
-			try:
-				years_to_fire = math.log(fire_number / net_worth) / math.log(1 + r)
-				if years_to_fire < 0:
-					years_to_fire = None
-			except (ValueError, ZeroDivisionError):
-				years_to_fire = None
-		# Store results in the database
-		g.db.execute(
-			'UPDATE users SET fire_number = ?, time_to_fire = ? WHERE id = ?', 
-			(fire_number, years_to_fire, session["user_id"])
-		)
-		g.db.commit()
-		return render_template('calculator.html', fire_number=fire_number, years_to_fire=years_to_fire)
+    if request.method == 'POST':
+        try:
+            income = float(request.form.get('income', 0))
+            expenses = float(request.form.get('expenses', 0))
+            savings_rate = float(request.form.get('savings_rate', 0))
+            net_worth = float(request.form.get('net_worth', 0))
+            swr = float(request.form.get('SWR', 0))
+            apr = float(request.form.get('APR', 0))
+        except ValueError:
+            return apology("Please enter valid numbers in all fields", 400)
 
-	return render_template('calculator.html')
+        # Check for zero or negative inputs that break the calculations
+        if swr <= 0 or expenses <= 0:
+            return apology("Savings withdrawal rate and expenses must be greater than zero", 400)
+
+        fire_number = expenses / (swr / 100)
+
+        years_to_fire = None
+        if fire_number and net_worth > 0 and apr > 0:
+            r = apr / 100
+            try:
+                years_to_fire = math.log(fire_number / net_worth) / math.log(1 + r)
+                if years_to_fire < 0:
+                    years_to_fire = None
+            except (ValueError, ZeroDivisionError):
+                years_to_fire = None
+
+        # Store results in the database
+        g.db.execute(
+            'UPDATE users SET fire_number = ?, time_to_fire = ? WHERE id = ?',
+            (fire_number, years_to_fire, session["user_id"])
+        )
+        g.db.commit()
+
+        return render_template('calculator.html', fire_number=fire_number, years_to_fire=years_to_fire)
+
+    return render_template('calculator.html')
 
 
 @app.route('/deposit', methods=['GET', 'POST'])
@@ -423,6 +435,3 @@ def deposit():
 
     # If GET request
     return render_template('deposit.html')
-
-if __name__ == "__main__":
-    app.run(debug=True)

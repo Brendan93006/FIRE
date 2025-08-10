@@ -3,6 +3,7 @@ from flask import redirect, render_template, session
 from flask import session
 import yfinance as yf
 
+
 def apology(message, code=400):
     """Render message as an apology to user."""
     return render_template("apology.html", top=code, bottom=message), code
@@ -19,6 +20,7 @@ def login_required(f):
 def usd(value):
     """Format value as USD."""
     return f"${value:,.2f}"
+
 
 def lookup(symbol):
     """Look up quote for symbol."""
