@@ -17,14 +17,14 @@
         <tbody>
             {% for account in accounts %}
                 <tr>
-                    <td>{{ accounts.name }}</td>
-                    <td>{{ accounts.type }}</td>
-                    <td>{{ accounts.balance | usd }}</td>
+                    <td>{{ account.name }}</td>
+                    <td>{{ account.type }}</td>
+                    <td>{{ account.balance | usd }}</td>
                 </tr>
             {% endfor %}
         </tbody>
     </table>
-    <form action="/open" method="post">
+    <form action="/open" method="GET">
         <button class="btn btn-success" type="submit">Open Account</button>
     </form>
 {% endblock %}

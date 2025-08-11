@@ -205,20 +205,98 @@ def accounts():
 @login_required
 def invest():
     """Invest in stocks"""
+    user_id = session["user_id"]
+
     if request.method == 'GET':
-        return render_template('invest.html')
-    
-    # POST request handling
-    symbol = request.form.get('symbol')
-    shares = request.form.get('shares')
+        accounts = g.db.execute(
+            "SELECT id, name FROM accounts WHERE user_id = ?",
+            (user_id,)
+        ).fetchall()
+        return render_template('invest.html', accounts=accounts)
+
+    # POST
+    buy_type = request.form.get('type')
+    symbol = request.form.get('symbol', '').strip().upper()
     account = request.form.get('account')
+
+    if not symbol or not symbol.isalpha():
+        return apology("invalid stock symbol", 400)
+
+    stock = lookup(symbol)
+    if stock is None:
+        return apology("invalid stock symbol", 400)
+
+    price = stock['price']
+
+    if buy_type == 'shares':
+        try:
+            shares = int(request.form.get('shares', 0))
+            if shares <= 0:
+                raise ValueError
+        except ValueError:
+            return apology("invalid number of shares", 400)
+        total = shares * price
+
+    elif buy_type == 'dollars':
+        try:
+            dollars = float(request.form.get('dollars', 0))
+            if dollars <= 0:
+                raise ValueError
+        except ValueError:
+            return apology("invalid dollar amount", 400)
+        shares = int(dollars // price)
+        if shares <= 0:
+            return apology("dollar amount too low to buy shares", 400)
+        total = shares * price
+
+    else:
+        return apology("invalid buy type", 400)
+
+    # Check account balance
+    account_balance = g.db.execute(
+        "SELECT balance FROM accounts WHERE user_id = ? AND name = ?",
+        (user_id, account)
+    ).fetchone()
+
+    if not account_balance or account_balance['balance'] < total:
+        return apology("not enough cash in account", 400)
+
+    # Perform transaction
+    g.db.execute(
+        "INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, 'BUY', ?)",
+        (user_id, symbol, shares, price, account)
+    )
+    g.db.execute(
+        "UPDATE accounts SET balance = balance - ? WHERE user_id = ? AND name = ?",
+        (total, user_id, account)
+    )
+    g.db.commit()
+
+    flash(f"Bought {shares} shares of {symbol} at {usd(price)}")
+    return redirect("/")
+
+
+@app.route("/sell", methods=["GET", "POST"])
+@login_required
+def sell():
+    if request.method == "GET":
+        accounts = g.db.execute(
+            "SELECT id, name FROM accounts WHERE user_id = ?",
+            (session["user_id"],)
+        ).fetchall()
+        return render_template("sell.html", accounts=accounts)
+
+    # POST
+    symbol = request.form.get("symbol")
+    shares = request.form.get("shares")
+    account = request.form.get("account")
 
     if not symbol or not shares:
         return apology("must provide symbol and shares", 400)
     if not symbol.isalpha():
         return apology("invalid stock symbol", 400)
-    if not shares.isdigit():
-        return apology("invalid number of shares", 400)
+
+    symbol = symbol.upper()
 
     try:
         shares = int(shares)
@@ -227,7 +305,15 @@ def invest():
     except ValueError:
         return apology("invalid number of shares", 400)
 
-    symbol = symbol.upper()
+    user_id = session["user_id"]
+    result = g.db.execute(
+        "SELECT symbol, SUM(CASE WHEN type = 'BUY' THEN shares ELSE -shares END) AS total_shares "
+        "FROM transactions WHERE user_id = ? AND symbol = ? AND account = ? GROUP BY symbol", 
+        (user_id, symbol, account)
+    ).fetchone()
+
+    if not result or result['total_shares'] < shares:
+        return apology("not enough shares to sell", 400)
 
     stock = lookup(symbol)
     if stock is None:
@@ -235,93 +321,27 @@ def invest():
 
     price = stock['price']
     total = shares * price
-    user_id = session["user_id"]
 
     account_balance = g.db.execute(
-        "SELECT balance FROM accounts WHERE user_id = ? AND name = ? AND type = 'CASH'",
+        "SELECT balance FROM accounts WHERE user_id = ? AND name = ? AND type = 'CASH'", 
         (user_id, account)
     ).fetchone()
+    if not account_balance:
+        return apology("account not found", 400)
 
-    if not account_balance or account_balance['balance'] < total:
-        return apology("not enough cash in account", 400)
-
-    # Insert the transaction and update the account balance atomically
     g.db.execute(
-        "INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, 'BUY', ?)",
-        (user_id, symbol, shares, price, account)
+        "INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, 'SELL', ?)", 
+        (user_id, symbol, -shares, price, account)
     )
     g.db.execute(
-        "UPDATE accounts SET balance = balance - ? WHERE user_id = ? AND name = ? AND type = 'CASH'",
+        "UPDATE accounts SET balance = balance + ? WHERE user_id = ? AND name = ? AND type = 'CASH'", 
         (total, user_id, account)
     )
     g.db.commit()
 
-    flash(f"Bought {shares} shares of {stock['symbol']} at {usd(stock['price'])}")
+    flash(f"Sold {shares} shares of {stock['symbol']} at {usd(price)}")
     return redirect("/")
 
-@app.route("/sell", methods=["GET", "POST"])
-@login_required
-def sell():
-    """Sell shares of stock"""
-    if request.method == "GET":
-        return render_template("sell.html")
-    if request.method == "POST":
-        symbol = request.form.get("symbol")
-        symbol = symbol.upper()
-        shares = request.form.get("shares")
-        account = request.form.get("account")
-
-        if not symbol or not shares:
-            return apology("must provide symbol and shares", 400)
-        if not symbol.isalpha():
-            return apology("invalid stock symbol", 400)
-        if not shares.isdigit():
-            return apology("invalid number of shares", 400)
-        try:
-            shares = int(shares)
-            if shares <= 0:
-                raise ValueError
-        except ValueError:
-            return apology("invalid number of shares", 400)
-
-        user_id = session["user_id"]
-        result = g.db.execute(
-            "SELECT symbol, SUM(CASE WHEN type = 'BUY' THEN shares ELSE -shares END) AS total_shares FROM transactions WHERE user_id = ? AND symbol = ? GROUP BY symbol", 
-            (user_id, symbol)
-        ).fetchone()
-
-        if not result or result['total_shares'] < shares:
-            return apology("not enough shares to sell", 400)
-
-        stock = lookup(symbol)
-        if stock is None:
-            return apology("invalid stock symbol", 400)
-
-        price = stock['price']
-        total = shares * price
-
-        account_balance = g.db.execute(
-            "SELECT balance FROM accounts WHERE user_id = ? AND name = ? AND type = 'CASH'", 
-            (user_id, account)
-        ).fetchone()
-        if not account_balance:
-            return apology("account not found", 400)
-
-        # Record the transaction
-        g.db.execute(
-            "INSERT INTO transactions (user_id, symbol, shares, price, type, account) VALUES (?, ?, ?, ?, 'SELL', ?)", 
-            (user_id, symbol, -shares, price, account)
-        )
-        g.db.execute(
-            "UPDATE accounts SET balance = balance + ? WHERE user_id = ? AND name = ? AND type = 'CASH'", 
-            (total, user_id, account)
-        )
-        g.db.commit()
-
-        flash(f"Sold {shares} shares of {stock['symbol']} at {usd(stock['price'])}")
-        return redirect("/")
-
-    return render_template("sell.html")
 
 @app.route("/research", methods=["GET", "POST"])
 @login_required
