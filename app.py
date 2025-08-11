@@ -372,13 +372,13 @@ def research():
 def calculator():
     if request.method == 'POST':
         try:
-            income = float(request.form.get('income', 0))
-            expenses = float(request.form.get('expenses', 0))
-            savings_rate = float(request.form.get('savings_rate', 0))
-            net_worth = float(request.form.get('net_worth', 0))
-            swr = float(request.form.get('SWR', 0))
-            apr = float(request.form.get('APR', 0))
-        except ValueError:
+            income = float(request.form.get('income', '').strip())
+            expenses = float(request.form.get('expenses', '').strip())
+            savings_rate = float(request.form.get('savings_rate', '').strip())
+            net_worth = float(request.form.get('net_worth', '').strip())
+            swr = float(request.form.get('swr', '').strip())
+            apr = float(request.form.get('apr', '').strip())
+        except (ValueError, AttributeError):
             return apology("Please enter valid numbers in all fields", 400)
 
         if swr <= 0 or expenses <= 0:
@@ -387,7 +387,7 @@ def calculator():
         fire_number = expenses / (swr / 100)
 
         years_to_fire = None
-        if fire_number and net_worth > 0 and apr > 0:
+        if fire_number > 0 and net_worth > 0 and apr > 0:
             r = apr / 100
             try:
                 years_to_fire = math.log(fire_number / net_worth) / math.log(1 + r)
@@ -406,9 +406,12 @@ def calculator():
             print("Database update error:", e)
             return apology("Internal server error", 500)
 
-        return render_template('calculator.html', fire_number=fire_number, years_to_fire=years_to_fire)
+        return render_template('calculator.html', 
+                               fire_number=f"{fire_number:,.2f}", 
+                               years_to_fire=f"{years_to_fire:.2f}" if years_to_fire else None)
 
     return render_template('calculator.html')
+
 
 
 
