@@ -43,46 +43,72 @@ def close_db(error):
 
 @app.route('/')
 def index():
-	"""Show portfolio of stocks"""
-	if 'user_id' not in session:
-		return redirect('/login')
+    """Show portfolio of stocks"""
+    if 'user_id' not in session:
+        return redirect('/login')
 
-	user_id = session['user_id']
-	user = g.db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-	if not user:
-		return apology("User not found", 404)
+    user_id = session['user_id']
+    user = g.db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        return apology("User not found", 404)
 
-	accounts_results = g.db.execute("SELECT * FROM accounts WHERE user_id = ?", (user_id,)).fetchall()
-	accounts = accounts_results
+    accounts_results = g.db.execute("SELECT * FROM accounts WHERE user_id = ?", (user_id,)).fetchall()
+    accounts = accounts_results
 
-	net_worth = sum(account['balance'] for account in accounts)
+    net_worth = sum(account['balance'] for account in accounts)
 
-	top_investment_results = g.db.execute("""SELECT symbol, SUM(CASE WHEN type = 'BUY' THEN shares ELSE -shares END) AS total_shares
-		FROM transactions WHERE user_id = ? GROUP BY symbol ORDER BY total_shares DESC LIMIT 5""", (user_id,))
-	top_investments = []
-	for row in top_investment_results:
-		symbol = row['symbol']
-		if symbol:
-			stock = lookup(symbol)
-			if stock:
-				top_investments.append({
-					'symbol': stock['symbol'],
-					'name': stock['name'],
-					'price': stock['price'],
-					'shares': row['total_shares'],
-					'value': row['total_shares'] * stock['price']
-				})
+    top_investment_results = g.db.execute("""
+        SELECT symbol, 
+               SUM(CASE WHEN type = 'BUY' THEN shares ELSE -shares END) AS total_shares
+        FROM transactions 
+        WHERE user_id = ? 
+        GROUP BY symbol 
+        ORDER BY total_shares DESC 
+        LIMIT 5
+    """, (user_id,))
+    
+    top_investments = []
+    for row in top_investment_results:
+        symbol = row['symbol']
+        if symbol:
+            stock = lookup(symbol)
+            if stock:
+                top_investments.append({
+                    'symbol': stock['symbol'],
+                    'name': stock['name'],
+                    'price': stock['price'],
+                    'shares': row['total_shares'],
+                    'value': row['total_shares'] * stock['price']
+                })
 
-	fire_results = g.db.execute("SELECT fire_number, time_to_fire FROM users WHERE id = ?", (user_id,)).fetchone()
-	if fire_results:
-		fire_number = fire_results['fire_number']
-		years_to_fire = fire_results['time_to_fire']
-	else:
-		fire_number = None
-		years_to_fire = None
+    # This was over-indented before
+    account_totals_results = g.db.execute(
+        "SELECT type, SUM(balance) AS total FROM accounts WHERE user_id = ? GROUP BY type", 
+        (user_id,)
+    ).fetchall()
+    account_totals = {row['type']: row['total'] for row in account_totals_results}
 
-	return render_template("index.html", user=user, accounts=accounts, net_worth=usd(net_worth), 
-						   top_investments=top_investments, fire_number=usd(fire_number) if fire_number else None, years_to_fire=years_to_fire if years_to_fire else None)
+    fire_results = g.db.execute(
+        "SELECT fire_number, time_to_fire FROM users WHERE id = ?", 
+        (user_id,)
+    ).fetchone()
+    if fire_results:
+        fire_number = fire_results['fire_number']
+        years_to_fire = fire_results['time_to_fire']
+    else:
+        fire_number = None
+        years_to_fire = None
+
+    return render_template(
+        "index.html",
+        user=user,
+        accounts=accounts,
+        net_worth=usd(net_worth),
+        top_investments=top_investments,
+        account_totals=account_totals,
+        fire_number=usd(fire_number) if fire_number else None,
+        years_to_fire=years_to_fire if years_to_fire else None
+    )
 
 @app.route("/history")
 @login_required
@@ -376,8 +402,8 @@ def calculator():
             expenses = float(request.form.get('expenses', '').strip())
             savings_rate = float(request.form.get('savings_rate', '').strip())
             net_worth = float(request.form.get('net_worth', '').strip())
-            swr = float(request.form.get('swr', '').strip())
-            apr = float(request.form.get('apr', '').strip())
+            swr = float(request.form.get('SWR', '').strip())
+            apr = float(request.form.get('APR', '').strip())
         except (ValueError, AttributeError):
             return apology("Please enter valid numbers in all fields", 400)
 
@@ -385,6 +411,7 @@ def calculator():
             return apology("Savings withdrawal rate and expenses must be greater than zero", 400)
 
         fire_number = expenses / (swr / 100)
+        fire_number = round(fire_number, 2)
 
         years_to_fire = None
         if fire_number > 0 and net_worth > 0 and apr > 0:
@@ -393,6 +420,8 @@ def calculator():
                 years_to_fire = math.log(fire_number / net_worth) / math.log(1 + r)
                 if years_to_fire < 0:
                     years_to_fire = None
+                else: 
+                    years_to_fire = round(years_to_fire)
             except (ValueError, ZeroDivisionError):
                 years_to_fire = None
 
@@ -407,10 +436,12 @@ def calculator():
             return apology("Internal server error", 500)
 
         return render_template('calculator.html', 
-                               fire_number=f"{fire_number:,.2f}", 
+                               fire_number=f"{fire_number:,.2f}" if fire_number else None, 
                                years_to_fire=f"{years_to_fire:.2f}" if years_to_fire else None)
 
-    return render_template('calculator.html')
+    return render_template('calculator.html',
+                           fire_number=None, 
+                           years_to_fire=None)
 
 
 

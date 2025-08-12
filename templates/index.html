@@ -5,31 +5,19 @@
 {% endblock %}
 
 {% block main %}
+<h2>Dashboard</h2>
     <table class="text-center table">
-        <h2>Dashboard</h2>
             <thead>
                 <tr>
-                    <th>CASH</th>
-                    <th>SAVINGS</th>
-                    <th>BROKERAGE</th>
-                    <th>RETIREMENT</th>
-                    <th>HEALTH</th>
+                    {% for account_type, total in account_totals.items() %}
+                        <th>{{ account_type }}</th>
+                    {% endfor %}
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    {% for account in accounts %}
-                        {% if account.type == "CASH" %}
-                            <td>{{ account.balance | usd }}</td>
-                        {% elif account.type == "SAVINGS" %}
-                            <td>{{ account.balance | usd }}</td>
-                        {% elif account.type == "BROKERAGE" %}
-                            <td>{{ account.balance | usd }}</td>
-                        {% elif account.type == "RETIREMENT" %}
-                            <td>{{ account.balance | usd }}</td>
-                        {% elif account.type == "HEALTH" %}
-                            <td>{{ account.balance | usd }}</td>
-                        {% endif %}
+                    {% for account_type, total in account_totals.items() %}
+                        <td>{{ total | usd }}</td>
                     {% endfor %}
                 </tr>
             </tbody>

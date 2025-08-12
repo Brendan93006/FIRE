@@ -19,6 +19,16 @@ def login_required(f):
 
 def usd(value):
     """Format value as USD."""
+    if value is None:
+        return "$0.00"
+    try:
+        value = float(value)
+    except (ValueError, TypeError):
+        return "$0.00"
+    if value < 0:
+        return f"-${abs(value):,.2f}"
+    if value == 0:
+        return "$0.00"
     return f"${value:,.2f}"
 
 
