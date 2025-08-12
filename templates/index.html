@@ -26,7 +26,11 @@
         <button class="btn btn-success" type="submit">Deposit</button>
     </form>
     <p><strong>Net Worth:</strong> {{ net_worth }}</p>
-    <p><strong>Top Investments:</strong> {{ top_investments[0].symbol }}</p>
+    {% if top_investments %}
+        <p><strong>Top Investments:</strong> {{ top_investments[0].symbol }}</p>
+    {% else %}
+        <p><strong>Top Investments:</strong> None</p>
+    {% endif %}
     <form action="/invest" method="GET">
         <button class="btn btn-success" type="submit">Invest</button>
     </form>

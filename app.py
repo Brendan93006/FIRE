@@ -80,6 +80,8 @@ def index():
                     'shares': row['total_shares'],
                     'value': row['total_shares'] * stock['price']
                 })
+    if not top_investments:
+        top_investments = None
 
     # This was over-indented before
     account_totals_results = g.db.execute(
